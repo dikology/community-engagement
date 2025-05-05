@@ -1,0 +1,7 @@
+[project]
+name = "community-engagement"
+version = "0.1.0"
+description = "yet another try to make something useful"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = []
