@@ -1,4 +1,5 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
+from fastapi.responses import HTMLResponse
 from app.core.config import get_settings
 from app.core.oauth import create_authorization_url, exchange_code_for_tokens
 from app.models.user import UserMapping, OAuthState
@@ -18,10 +19,11 @@ oauth_states: dict[str, OAuthState] = {}
 user_mappings: dict[str, UserMapping] = {}
 
 
-@router.get("/link")
+@router.get("/link", response_class=HTMLResponse)
 async def initiate_oauth(telegram_user_id: str):
     """
     Initiates the OAuth flow for linking a Telegram user with their Google account.
+    Returns an HTML page that automatically redirects to the OAuth URL.
 
     Args:
         telegram_user_id: The Telegram user ID to link with Google account
@@ -42,46 +44,154 @@ async def initiate_oauth(telegram_user_id: str):
     oauth_states[state] = oauth_state
     logger.info(f"Stored OAuth state for user {telegram_user_id}")
 
-    return {
-        "authorization_url": auth_url,
-        "state": state,
-        "expires_at": oauth_state.expires_at.isoformat(),
-    }
+    # Return HTML that automatically redirects to the OAuth URL
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Redirecting to Google OAuth...</title>
+        <meta http-equiv="refresh" content="0;url={auth_url}">
+        <style>
+            body {{
+                font-family: Arial, sans-serif;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                height: 100vh;
+                margin: 0;
+                background-color: #f5f5f5;
+            }}
+            .container {{
+                text-align: center;
+                padding: 2rem;
+                background: white;
+                border-radius: 8px;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            }}
+            .spinner {{
+                border: 4px solid #f3f3f3;
+                border-top: 4px solid #3498db;
+                border-radius: 50%;
+                width: 40px;
+                height: 40px;
+                animation: spin 1s linear infinite;
+                margin: 20px auto;
+            }}
+            @keyframes spin {{
+                0% {{ transform: rotate(0deg); }}
+                100% {{ transform: rotate(360deg); }}
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h2>Redirecting to Google...</h2>
+            <div class="spinner"></div>
+            <p>If you are not redirected automatically, <a href="{auth_url}">click here</a>.</p>
+        </div>
+    </body>
+    </html>
+    """
+    return HTMLResponse(content=html_content)
 
 
-# Note: This endpoint will be mounted at /oauth/callback in main.py
-@router.get("/callback")
-async def oauth_callback(code: str, state: str):
+@router.get("/callback", response_class=HTMLResponse)
+async def oauth_callback(state: str, code: str):
     """
     Handles the OAuth callback from Google.
-
-    Args:
-        code: The authorization code from Google
-        state: The state parameter to verify the request
+    Returns an HTML success page after successful authentication.
     """
     logger.info(f"Received OAuth callback with state: {state}")
 
     # Verify state
-    if state not in oauth_states:
-        logger.error(f"Invalid state parameter: {state}")
-        raise HTTPException(status_code=400, detail="Invalid state parameter")
+    oauth_state = oauth_states.get(state)
+    if not oauth_state:
+        logger.error(f"Invalid or expired state: {state}")
+        return HTMLResponse(
+            content="""
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Authentication Failed</title>
+                <style>
+                    body {
+                        font-family: Arial, sans-serif;
+                        display: flex;
+                        justify-content: center;
+                        align-items: center;
+                        height: 100vh;
+                        margin: 0;
+                        background-color: #f5f5f5;
+                    }
+                    .container {
+                        text-align: center;
+                        padding: 2rem;
+                        background: white;
+                        border-radius: 8px;
+                        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                    }
+                    .error {
+                        color: #dc3545;
+                        margin: 20px 0;
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <h2>Authentication Failed</h2>
+                    <p class="error">Invalid or expired authentication state.</p>
+                    <p>Please try again from your Telegram bot.</p>
+                </div>
+            </body>
+            </html>
+            """,
+            status_code=400,
+        )
 
-    oauth_state = oauth_states[state]
+    if oauth_state.expires_at < datetime.utcnow():
+        logger.error(f"Expired state for user: {oauth_state.telegram_user_id}")
+        return HTMLResponse(
+            content="""
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Authentication Expired</title>
+                <style>
+                    body {
+                        font-family: Arial, sans-serif;
+                        display: flex;
+                        justify-content: center;
+                        align-items: center;
+                        height: 100vh;
+                        margin: 0;
+                        background-color: #f5f5f5;
+                    }
+                    .container {
+                        text-align: center;
+                        padding: 2rem;
+                        background: white;
+                        border-radius: 8px;
+                        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                    }
+                    .error {
+                        color: #dc3545;
+                        margin: 20px 0;
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <h2>Authentication Expired</h2>
+                    <p class="error">Your authentication session has expired.</p>
+                    <p>Please try again from your Telegram bot.</p>
+                </div>
+            </body>
+            </html>
+            """,
+            status_code=400,
+        )
+
     logger.info(f"Found OAuth state for user: {oauth_state.telegram_user_id}")
-
-    # Check if state has expired
-    if datetime.utcnow() > oauth_state.expires_at:
-        logger.error(f"State has expired for user: {oauth_state.telegram_user_id}")
-        del oauth_states[state]
-        raise HTTPException(status_code=400, detail="State has expired")
-
-    # Check if state has already been used
-    if oauth_state.is_used:
-        logger.error(f"State already used for user: {oauth_state.telegram_user_id}")
-        raise HTTPException(status_code=400, detail="State has already been used")
-
-    # Mark state as used
-    oauth_state.is_used = True
 
     try:
         # Exchange code for tokens
@@ -96,9 +206,9 @@ async def oauth_callback(code: str, state: str):
                 headers={"Authorization": f"Bearer {tokens['access_token']}"},
             )
             user_info = response.json()
-            logger.info(f"Retrieved user info for email: {user_info.get('email')}")
+            logger.info(f"Retrieved user info for email: {user_info['email']}")
 
-        # Create or update user mapping
+        # Create user mapping
         user_mapping = UserMapping(
             telegram_user_id=oauth_state.telegram_user_id,
             google_email=user_info["email"],
@@ -109,18 +219,98 @@ async def oauth_callback(code: str, state: str):
             f"Created user mapping for Telegram user {oauth_state.telegram_user_id}"
         )
 
-        return {
-            "status": "success",
-            "message": "Successfully linked Telegram account with Google account",
-            "email": user_info["email"],
-        }
+        # Return success page
+        success_html = """
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Authentication Successful</title>
+            <style>
+                body {
+                    font-family: Arial, sans-serif;
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                    height: 100vh;
+                    margin: 0;
+                    background-color: #f5f5f5;
+                }
+                .container {
+                    text-align: center;
+                    padding: 2rem;
+                    background: white;
+                    border-radius: 8px;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                }
+                .success {
+                    color: #28a745;
+                    margin: 20px 0;
+                }
+                .checkmark {
+                    color: #28a745;
+                    font-size: 48px;
+                    margin: 20px 0;
+                }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <h2>Authentication Successful!</h2>
+                <div class="checkmark">✓</div>
+                <p class="success">Your Google account has been successfully linked.</p>
+                <p>You can now return to your Telegram bot and continue using the service.</p>
+            </div>
+        </body>
+        </html>
+        """
+        return HTMLResponse(content=success_html)
 
     except Exception as e:
         logger.error(f"Error in OAuth callback: {str(e)}")
-        raise HTTPException(
-            status_code=500, detail=f"Failed to complete OAuth flow: {str(e)}"
+        return HTMLResponse(
+            content=f"""
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Authentication Error</title>
+                <style>
+                    body {{
+                        font-family: Arial, sans-serif;
+                        display: flex;
+                        justify-content: center;
+                        align-items: center;
+                        height: 100vh;
+                        margin: 0;
+                        background-color: #f5f5f5;
+                    }}
+                    .container {{
+                        text-align: center;
+                        padding: 2rem;
+                        background: white;
+                        border-radius: 8px;
+                        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                    }}
+                    .error {{
+                        color: #dc3545;
+                        margin: 20px 0;
+                    }}
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <h2>Authentication Error</h2>
+                    <p class="error">Failed to complete authentication: {str(e)}</p>
+                    <p>Please try again from your Telegram bot.</p>
+                </div>
+            </body>
+            </html>
+            """,
+            status_code=500,
         )
     finally:
         # Clean up used state
-        del oauth_states[state]
-        logger.info(f"Cleaned up OAuth state for user: {oauth_state.telegram_user_id}")
+        if state in oauth_states:
+            del oauth_states[state]
+            logger.info(
+                f"Cleaned up OAuth state for user: {oauth_state.telegram_user_id}"
+            )
