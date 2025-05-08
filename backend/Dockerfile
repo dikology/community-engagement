@@ -33,4 +33,4 @@ ENTRYPOINT []
 
 # Run the FastAPI application using uvicorn
 # Uses `--host 0.0.0.0` to allow access from outside the container
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0"]

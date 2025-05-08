@@ -22,11 +22,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include API router
+# Include API router (includes auth endpoints at /api/v1/auth)
 app.include_router(api_router, prefix=settings.API_V1_STR)
 
-# Mount the OAuth callback endpoint at /oauth/callback
-app.include_router(auth.router, prefix="/oauth", tags=["oauth"])
+# Include OAuth router at the root level
+app.include_router(auth.oauth_router, prefix="/oauth", tags=["oauth"])
 
 
 @app.get("/")
