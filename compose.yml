@@ -9,6 +9,16 @@ services:
     ports:
       - "8000:8000"
 
+    # Add environment variables
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/community_bot
+      - REDIS_URL=redis://redis:6379/0
+
+    # Add dependencies
+    depends_on:
+      - db
+      - redis
+
     # env_file:
     #   - .env
 
@@ -28,3 +38,25 @@ services:
         # Rebuild the image if dependencies change by checking uv.lock
         - action: rebuild
           path: ./uv.lock
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=community_bot
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+volumes:
+  postgres_data:
+  redis_data:

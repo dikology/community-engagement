@@ -129,3 +129,53 @@ The primary goal is to encourage the sharing and updating of valuable informatio
 ```
 curl -X GET "http://localhost:8000/api/v1/auth/link?telegram_user_id=123456789"
 ```
+
+## TODO
+
+1. **Implement Persistent Storage**
+   - Currently, you're using in-memory dictionaries (`oauth_states` and `user_mappings`) which will be lost on server restart
+   - According to the README, you should implement:
+     - PostgreSQL for user mappings (for structured relational data with ACID compliance)
+     - Redis for OAuth state (for ephemeral session data with fast access and built-in expiration)
+
+2. **Database Integration**
+   - Set up database models and migrations
+   - Implement database connection handling
+   - Add database session management
+   - Create repository layer for data access
+
+3. **Telegram Bot Integration**
+   - Implement the Telegram bot commands (especially `/linkdo`)
+   - Add proper error handling and user feedback
+   - Implement the achievement system for recognizing contributions
+
+4. **Google Sheets Integration**
+   - Set up Google Sheets API integration
+   - Implement the Apps Script for edit detection
+   - Create the webhook endpoint for receiving sheet updates
+
+
+Now that we have set up the database infrastructure, here are the next steps you should take:
+
+1. Initialize the database and create the first migration:
+```bash
+cd backend
+alembic init alembic
+alembic revision --autogenerate -m "Initial migration"
+alembic upgrade head
+```
+
+2. Update your OAuth flow to use the database instead of in-memory storage:
+   - Replace the in-memory dictionaries with database operations
+   - Use Redis for OAuth state storage
+   - Add proper error handling for database operations
+
+3. Add database tests:
+   - Create test fixtures for database and Redis
+   - Update existing tests to use the database
+   - Add new tests for database operations
+
+4. Update the documentation:
+   - Add database setup instructions
+   - Document the database schema
+   - Add information about migrations
