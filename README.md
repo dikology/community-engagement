@@ -164,6 +164,86 @@ alembic init alembic
 alembic revision --autogenerate -m "Initial migration"
 alembic upgrade head
 ```
+**Test direct SQLAlchemy connection using the synchronous URL from Python:**
+
+To bypass Alembic for a moment and confirm that Python with SQLAlchemy and psycopg2 can connect and create a simple table, let's run a small test script.
+
+I'll write a Python script that uses the *synchronous* URL to connect and try to create a dummy table. This will tell us if the basic SQLAlchemy + psycopg2 stack is working with your database.
+
+Ran tool
+My apologies, I cannot execute arbitrary Python code directly like that. I forgot about that limitation.
+
+However, you can very easily run this test yourself.
+
+1.  Create a temporary Python file in your project's root directory (or anywhere, as long as your virtual environment with `SQLAlchemy` and `psycopg2-binary` is active). Let's call it `test_db_sync.py`.
+
+2.  Paste the following code into `test_db_sync.py`:
+
+    ```python
+    import sqlalchemy
+    import os
+
+    # Fallback if DATABASE_URL is not in environment for some reason during test
+    # Ideally, your .env is loaded if you run this from a context that does it,
+    # or you can manually set the URL here.
+    # For this test, we'll use the direct string.
+    SYNC_DATABASE_URL = "postgresql+psycopg2://postgres:postgres@localhost:5432/community_bot"
+
+    try:
+        print(f"Attempting to connect to: {SYNC_DATABASE_URL}")
+        # echo=True will show all SQL SQLAlchemy executes
+        engine = sqlalchemy.create_engine(SYNC_DATABASE_URL, echo=True)
+
+        with engine.connect() as connection:
+            print("Successfully connected to the database.")
+
+            # Use a try-finally block to ensure cleanup even if assertions fail
+            try:
+                # Try to create a simple test table
+                connection.execute(sqlalchemy.text("DROP TABLE IF EXISTS alembic_direct_test_table;"))
+                connection.execute(sqlalchemy.text("CREATE TABLE alembic_direct_test_table (id INTEGER PRIMARY KEY, name VARCHAR(50));"))
+                print("Successfully created 'alembic_direct_test_table'.")
+
+                # Try to insert a row
+                connection.execute(sqlalchemy.text("INSERT INTO alembic_direct_test_table (id, name) VALUES (1, 'test_sync');"))
+                print("Successfully inserted a row into 'alembic_direct_test_table'.")
+
+                # Try to select the row
+                result = connection.execute(sqlalchemy.text("SELECT * FROM alembic_direct_test_table WHERE id = 1;"))
+                row = result.fetchone()
+                print(f"Selected row: {row}")
+                assert row is not None, "Row was not inserted/selected!"
+                assert row[0] == 1 and row[1] == "test_sync", "Row data mismatch!"
+
+                connection.commit() # Commit the transaction that includes DDL and DML
+                print("Transaction committed.")
+
+            finally:
+                # Clean up the test table
+                connection.execute(sqlalchemy.text("DROP TABLE IF EXISTS alembic_direct_test_table;"))
+                connection.commit() # Commit the drop
+                print("Successfully dropped 'alembic_direct_test_table'.")
+
+        print("SQLAlchemy synchronous connection test successful.")
+
+    except Exception as e:
+        print(f"SQLAlchemy synchronous connection test FAILED:")
+        import traceback
+        traceback.print_exc()
+
+    ```
+
+3.  Activate your virtual environment (`source .venv/bin/activate`).
+4.  Run the script from your terminal: `python test_db_sync.py`
+
+Please run this script and show me its full output.
+
+This test will isolate whether the issue lies with:
+*   The basic ability of SQLAlchemy and `psycopg2` to connect to your PostgreSQL instance and execute DDL/DML.
+*   Or if the problem is specific to how Alembic is orchestrating these connections or operations.
+
+If this script works successfully, it means your database connection string is fine, `psycopg2` is working, and SQLAlchemy can interact with the DB. The problem would then be squarely within Alembic's handling of this connection or its operational logic.
+If this script *fails*, it will likely give a more direct error message about the connection or database operation, which will be a crucial clue.
 
 2. Update your OAuth flow to use the database instead of in-memory storage:
    - Replace the in-memory dictionaries with database operations
@@ -179,3 +259,4 @@ alembic upgrade head
    - Add database setup instructions
    - Document the database schema
    - Add information about migrations
+
