@@ -123,3 +123,9 @@ The primary goal is to encourage the sharing and updating of valuable informatio
 *   Consider using Telegram Webhooks instead of polling for scalability.
 *   Add tests.
 *   Improve UI/UX for the `/link` command (e.g., Inline Keyboard Button).
+
+## Development
+
+```
+curl -X GET "http://localhost:8000/api/v1/auth/link?telegram_user_id=123456789"
+```

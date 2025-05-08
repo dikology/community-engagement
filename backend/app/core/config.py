@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     # Google OAuth Settings
     GOOGLE_CLIENT_ID: str
     GOOGLE_CLIENT_SECRET: str
-    GOOGLE_REDIRECT_URI: str
+    GOOGLE_REDIRECT_URI: Optional[str] = None  # Will be computed
 
     # App Settings
     APP_BASE_URL: str
@@ -23,6 +23,11 @@ class Settings(BaseSettings):
     # Database Settings
     DATABASE_URL: Optional[str] = None
     REDIS_URL: Optional[str] = None
+
+    @property
+    def redirect_uri(self) -> str:
+        """Compute the full redirect URI."""
+        return f"{self.APP_BASE_URL}/oauth/callback"
 
     class Config:
         env_file = ".env"
