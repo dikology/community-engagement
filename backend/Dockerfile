@@ -25,9 +25,12 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # Place executables in the environment at the front of the path
 ENV PATH="/app/.venv/bin:$PATH"
 
+# Add the backend directory to PYTHONPATH
+ENV PYTHONPATH="/app/backend:${PYTHONPATH}"
+
 # Reset the entrypoint, don't invoke `uv`
 ENTRYPOINT []
 
 # Run the FastAPI application using uvicorn
 # Uses `--host 0.0.0.0` to allow access from outside the container
-CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0"]
